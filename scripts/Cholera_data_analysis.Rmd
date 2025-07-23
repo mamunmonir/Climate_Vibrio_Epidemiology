@@ -1,0 +1,544 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-07-01"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Call required libraries and load data
+
+```{r}
+library(dplyr)
+library(tidyr)
+setwd("/Users/mdmamunmonir/MAC_DRIVE/DOC/Manuscripts/MS_hospital_data")
+data_cholera<-read.csv("cholera_data.csv", header=T)
+```
+
+## Summary surveillance data
+# Cholera cases in the years 1996-2010 and 2011-2024
+
+```{r cars}
+# Summary table
+df=data_cholera
+
+df <- df %>%
+  mutate(
+    year_group = case_when(
+      DOVY >= 1996 & DOVY <= 2010 ~ "1996-2010",
+      DOVY >= 2011 & DOVY <= 2024 ~ "2011-2024",
+      TRUE ~ NA_character_
+    )
+  )
+
+# Summarise yearly case counts
+df_summary_cases <- df %>%
+  group_by(year_group, DOVY) %>%
+  summarise(n_yearly = n(), .groups = "drop") %>%
+  group_by(year_group) %>%
+  summarise(
+    median = median(n_yearly),
+    min = min(n_yearly),
+    max = max(n_yearly),
+    total_cases = sum(n_yearly)
+  )
+
+# Create a dataframe with yearly counts per year to run the test
+df_yearly_counts <- df %>%
+  group_by(year_group, DOVY) %>%
+  summarise(n_yearly = n(), .groups = "drop")
+
+# Wilcoxon rank-sum test
+test_result <- wilcox.test(n_yearly ~ year_group, data = df_yearly_counts)
+
+# View summary and test result
+print(df_summary_cases)
+print(test_result)
+
+```
+
+# Function for summary of other categorical factors with the year groups
+
+```{r}
+library(dplyr)
+library(tidyr)
+
+summarize_by_group <- function(df, group_var) {
+  group_var <- rlang::ensym(group_var)  # capture the group variable symbolically
+  
+  # Step 1: Summary
+  df_summary <- df %>%
+    group_by(year_group, !!group_var, DOVY) %>%
+    summarise(n_yearly = n(), .groups = "drop") %>%
+    group_by(year_group, !!group_var) %>%
+    summarise(
+      median = median(n_yearly),
+      min = min(n_yearly),
+      max = max(n_yearly),
+      total_cases = sum(n_yearly),
+      .groups = "drop"
+    ) %>%
+    group_by(year_group) %>%
+    mutate(percent = round(100 * total_cases / sum(total_cases), 1)) %>%
+    ungroup()
+  
+  # Step 2: Chi-squared test
+  group_table <- df %>%
+    group_by(year_group, !!group_var) %>%
+    summarise(n = n(), .groups = "drop") %>%
+    pivot_wider(names_from = year_group, values_from = n, values_fill = 0)
+  
+  # Convert to matrix
+  group_matrix <- as.matrix(group_table[,-1])
+  rownames(group_matrix) <- group_table[[1]]
+  
+  # Check that at least two columns exist for chi-squared test
+  if (ncol(group_matrix) >= 2) {
+    test_result <- chisq.test(group_matrix)
+    
+    # Add test result to summary
+    df_summary <- df_summary %>%
+      mutate(
+        chi_sq_statistic = round(test_result$statistic, 2),
+        p_value = signif(test_result$p.value, 3)
+      )
+  } else {
+    warning("Chi-squared test not performed: less than 2 year_group columns present.")
+  }
+  
+  return(df_summary)
+}
+
+```
+
+# Summarizing factors or groups
+
+```{r}
+
+df <- df %>%
+  mutate(age_group = case_when(
+    agey >= 0 & agey <= 4   ~ "Infants (0-4 years)",
+    agey >= 5 & agey <= 14  ~ "Children (5-14 years)",
+    agey >= 15 & agey <= 49 ~ "Adults (15-49 years)",
+    agey >= 50             ~ "Older Adults (50+)",
+    TRUE                  ~ NA_character_   # For missing or invalid age values
+  ))
+
+df <-df %>%
+  mutate(season = case_when(
+    DOVM %in% c("Mar", "Apr", "May") ~ "Pre-monsoon (March-May)",
+    DOVM %in% c("Sep", "Oct", "Nov") ~ "Post-monsoon (September–November)",
+    DOVM %in% c("Jan", "Feb", "Jun", "Jul", "Aug", "Dec") ~ "Off-peak",
+    TRUE                  ~ NA_character_   # For missing or invalid month values
+  ))
+
+df <-df %>%
+  mutate(dehydration = case_when(
+    DEHYDR %in% c("Severe") ~ "Severe dehydration",
+    DEHYDR %in% c("Some") ~ "Mild to moderate dehydration",
+    DEHYDR %in% c("No", "None") ~ "No dehydration",
+    TRUE                  ~ NA_character_   # For missing or invalid month values
+  ))
+
+# Seasonality
+df_season_summary <- summarize_by_group(df, season)
+
+# Patients characteristics
+df_age_summary <- summarize_by_group(df, age_group)
+df_sex_summary <- summarize_by_group(df, sex)
+df_EDUFATH_summary<-summarize_by_group(df, EDUFATH)
+
+# Living condition and Education
+df_region_summary <- summarize_by_group(df, AREA)
+df_FLOOR_summary<-summarize_by_group(df, FLOOR)
+df_WALL_summary<-summarize_by_group(df, WALL)
+df_ROOF_summary<-summarize_by_group(df, ROOF)
+df_DEFECA_summary<-summarize_by_group(df, DEFECA)
+
+#Clinical symptoms
+df_dehydration_summary <- summarize_by_group(df, dehydration)
+df_TEMP_summary<-summarize_by_group(df, TEMP)
+df_CHARSTOL_summary<-summarize_by_group(df, CHARSTOL)
+df_CONSTOL_summary<-summarize_by_group(df, CONSTOL)
+df_NUMSTOOL_summary<-summarize_by_group(df, NUMSTOOL)
+df_VOMIT_summary<-summarize_by_group(df, VOMIT)
+df_ABDPAIN_summary<-summarize_by_group(df, ABDPAIN)
+
+
+# Export summaries to CSV
+write.csv(df_season_summary, file = "df_season_summary.csv", row.names = FALSE)
+write.csv(df_age_summary, file = "df_age_summary.csv", row.names = FALSE)
+write.csv(df_sex_summary, file = "df_sex_summary.csv", row.names = FALSE)
+write.csv(df_region_summary, file = "df_region_summary.csv", row.names = FALSE)
+write.csv(df_FLOOR_summary, file = "df_FLOOR_summary.csv", row.names = FALSE)
+write.csv(df_WALL_summary, file = "df_WALL_summary.csv", row.names = FALSE)
+write.csv(df_ROOF_summary, file = "df_ROOF_summary.csv", row.names = FALSE)
+write.csv(df_EDUFATH_summary, file = "df_EDUFATH_summary.csv", row.names = FALSE)
+write.csv(df_dehydration_summary, file = "df_dehydration_summary.csv", row.names = FALSE)
+write.csv(df_DEFECA_summary, file = "df_DEFECA_summary.csv", row.names = FALSE)
+write.csv(df_TEMP_summary, file = "df_TEMP_summary.csv", row.names = FALSE)
+write.csv(df_CHARSTOL_summary, file = "df_CHARSTOL_summary.csv", row.names = FALSE)
+write.csv(df_CONSTOL_summary, file = "df_CONSTOL_summary.csv", row.names = FALSE)
+write.csv(df_NUMSTOOL_summary, file = "df_NUMSTOOL_summary.csv", row.names = FALSE)
+write.csv(df_VOMIT_summary, file = "df_VOMIT_summary.csv", row.names = FALSE)
+write.csv(df_ABDPAIN_summary, file = "df_ABDPAIN_summary.csv", row.names = FALSE)
+
+
+
+
+```
+
+
+# Cholera cases in the age groups
+
+```{r}
+
+write.csv(df_age_summary, file="df_age_summary.csv")
+
+```
+
+# Sex group
+
+```{r}
+df_sex_summary <- df %>%
+  group_by(year_group, sex, DOVY) %>%
+  summarise(n_yearly = n(), .groups = "drop") %>%
+  group_by(year_group, sex) %>%
+  summarise(
+    median = median(n_yearly),
+    min = min(n_yearly),
+    max = max(n_yearly),
+    total_cases = sum(n_yearly),
+    .groups = "drop"
+  ) %>%
+  group_by(year_group) %>%
+  mutate(percent = round(100 * total_cases / sum(total_cases), 1)) %>%
+  ungroup()
+
+# Step 2: Chi-squared test for age group distribution by year group
+sex_group_table <- df %>%
+  group_by(year_group, sex) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  pivot_wider(names_from = year_group, values_from = n, values_fill = 0)
+
+# Convert to matrix for test
+sex_matrix <- as.matrix(sex_group_table[,-1])  # exclude age_group column
+rownames(sex_matrix) <- sex_group_table$sex_group
+
+# Perform chi-squared test
+sex_test <- chisq.test(age_matrix[,-5])
+
+# Add test statistic and p-value to all rows in summary (optional)
+df_age_summary <- df_age_summary %>%
+  mutate(
+    chi_sq_statistic = round(age_test$statistic, 2),
+    p_value = signif(age_test$p.value, 3)
+  )
+
+df_age_summary$age_group <- factor(df_age_summary$age_group, levels = c(
+  "Infants (0-4 years)",
+  "Children (5-14 years)",
+  "Adults (15-49 years)",
+  "Older Adults (50+)"
+))
+
+write.csv(df_age_summary, file="df_age_summary.csv")
+
+```
+
+# Visualization
+
+```{r}
+# Create table and calculate percentages
+library(ggplot2)
+library(reshape2)
+
+
+# Seasonality
+tbl <- table(df$DOVY, df$season)[-29,]
+prop_tbl <- prop.table(tbl, margin = 1) * 100
+df_long <- melt(prop_tbl)
+colnames(df_long) <- c("DOVY", "season", "Percentage")
+
+df_long$DOVY <- factor(df_long$DOVY, levels = unique(df_long$DOVY))
+
+p1<-ggplot(df_long, aes(x = DOVY, y = Percentage, group = season, color = season)) +
+  geom_line(size = 0.5) +
+  geom_point(size = 2) +
+  labs(title = "Seasonal cholera cases",
+       x = "DOVY", y = "Percentage (%)") +
+  scale_x_discrete(drop = FALSE) +  # Keep all DOVY levels
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Patients characteristics
+#age_group
+tbl <- table(df$DOVY, df$age_group)
+prop_tbl <- prop.table(tbl, margin = 1) * 100
+df_long <- melt(prop_tbl)
+colnames(df_long) <- c("DOVY", "age_group", "Percentage")
+
+df_long$DOVY <- factor(df_long$DOVY, levels = unique(df_long$DOVY))
+
+p2<-ggplot(df_long, aes(x = DOVY, y = Percentage, group = age_group, color = age_group)) +
+  geom_line(size = 0.5) +
+  geom_point(size = 2) +
+  labs(title = "Age groups of the cholera patients",
+       x = "DOVY", y = "Percentage (%)") +
+  scale_x_discrete(drop = FALSE) +  # Keep all DOVY levels
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# sex
+tbl <- table(df$DOVY, df$sex)[,-1]
+prop_tbl <- prop.table(tbl, margin = 1) * 100
+df_long <- melt(prop_tbl)
+colnames(df_long) <- c("DOVY", "sex", "Percentage")
+
+df_long$DOVY <- factor(df_long$DOVY, levels = unique(df_long$DOVY))
+
+p3<-ggplot(df_long, aes(x = DOVY, y = Percentage, group = sex, color = sex)) +
+  geom_line(size = 0.5) +
+  geom_point(size = 2) +
+  labs(title = "Sex groups of the cholera patients",
+       x = "DOVY", y = "Percentage (%)") +
+  scale_x_discrete(drop = FALSE) +  # Keep all DOVY levels
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Living condition and Education
+
+#AREA
+tbl <- table(df$DOVY, df$AREA)[,-c(1,2)]
+prop_tbl <- prop.table(tbl, margin = 1) * 100
+df_long <- melt(prop_tbl)
+colnames(df_long) <- c("DOVY", "AREA", "Percentage")
+
+df_long$DOVY <- factor(df_long$DOVY, levels = unique(df_long$DOVY))
+
+p4<-ggplot(df_long, aes(x = DOVY, y = Percentage, group = AREA, color = AREA)) +
+  geom_line(size = 0.5) +
+  geom_point(size = 2) +
+  labs(title = "Living area of the cholera patients",
+       x = "DOVY", y = "Percentage (%)") +
+  scale_x_discrete(drop = FALSE) +  # Keep all DOVY levels
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# FLOOR
+tbl <- table(df$DOVY, df$FLOOR)[,-c(1,2,4)]
+prop_tbl <- prop.table(tbl, margin = 1) * 100
+df_long <- melt(prop_tbl)
+colnames(df_long) <- c("DOVY", "FLOOR", "Percentage")
+
+df_long$DOVY <- factor(df_long$DOVY, levels = unique(df_long$DOVY))
+
+p5<-ggplot(df_long, aes(x = DOVY, y = Percentage, group = FLOOR, color = FLOOR)) +
+  geom_line(size = 0.5) +
+  geom_point(size = 2) +
+  labs(title = "Floor type of the household",
+       x = "DOVY", y = "Percentage (%)") +
+  scale_x_discrete(drop = FALSE) +  # Keep all DOVY levels
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# WALL
+tbl <- table(df$DOVY, df$WALL)[,-c(1:7)]
+prop_tbl <- prop.table(tbl, margin = 1) * 100
+df_long <- melt(prop_tbl)
+colnames(df_long) <- c("DOVY", "WALL", "Percentage")
+
+df_long$DOVY <- factor(df_long$DOVY, levels = unique(df_long$DOVY))
+
+p6<-ggplot(df_long, aes(x = DOVY, y = Percentage, group = WALL, color = WALL)) +
+  geom_line(size = 0.5) +
+  geom_point(size = 2) +
+  labs(title = "Wall type of the household",
+       x = "DOVY", y = "Percentage (%)") +
+  scale_x_discrete(drop = FALSE) +  # Keep all DOVY levels
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# ROOF
+tbl <- table(df$DOVY, df$ROOF)[,-c(1:4)]
+prop_tbl <- prop.table(tbl, margin = 1) * 100
+df_long <- melt(prop_tbl)
+colnames(df_long) <- c("DOVY", "ROOF", "Percentage")
+
+df_long$DOVY <- factor(df_long$DOVY, levels = unique(df_long$DOVY))
+
+p7<-ggplot(df_long, aes(x = DOVY, y = Percentage, group = ROOF, color = ROOF)) +
+  geom_line(size = 0.5) +
+  geom_point(size = 2) +
+  labs(title = "Roof type of the household",
+       x = "DOVY", y = "Percentage (%)") +
+  scale_x_discrete(drop = FALSE) +  # Keep all DOVY levels
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# EDUFATH
+tbl <- table(df$DOVY, df$EDUFATH)[,-c(1)]
+prop_tbl <- prop.table(tbl, margin = 1) * 100
+df_long <- melt(prop_tbl)
+colnames(df_long) <- c("DOVY", "EDUFATH", "Percentage")
+
+df_long$DOVY <- factor(df_long$DOVY, levels = unique(df_long$DOVY))
+
+p8<-ggplot(df_long, aes(x = DOVY, y = Percentage, group = EDUFATH, color = EDUFATH)) +
+  geom_line(size = 0.5) +
+  geom_point(size = 2) +
+  labs(title = "Father's education of the cholera patients",
+       x = "DOVY", y = "Percentage (%)") +
+  scale_x_discrete(drop = FALSE) +  # Keep all DOVY levels
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# DEFECA (Toilet facility)
+tbl <- table(df$DOVY, df$DEFECA)[,-c(1,2)]
+prop_tbl <- prop.table(tbl, margin = 1) * 100
+df_long <- melt(prop_tbl)
+colnames(df_long) <- c("DOVY", "DEFECA", "Percentage")
+
+df_long$DOVY <- factor(df_long$DOVY, levels = unique(df$DOVY))
+p9<-ggplot(df_long, aes(x = DOVY, y = Percentage, group = DEFECA, color = DEFECA)) +
+  geom_line(size = 0.5) +
+  geom_point(size = 2) +
+  labs(title = "Toilet facility of the cholera patients",
+       x = "DOVY", y = "Percentage (%)") +
+  scale_x_discrete(drop = FALSE) +  # Keep all DOVY levels
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+#Clinical symptoms
+#dehydration
+tbl <- table(df$DOVY, df$dehydration)
+prop_tbl <- prop.table(tbl, margin = 1) * 100
+df_long <- melt(prop_tbl)
+colnames(df_long) <- c("DOVY", "dehydration", "Percentage")
+
+df_long$DOVY <- factor(df_long$DOVY, levels = unique(df_long$DOVY))
+
+p10<-ggplot(df_long, aes(x = DOVY, y = Percentage, group = dehydration, color = dehydration)) +
+  geom_line(size = 0.5) +
+  geom_point(size = 2) +
+  labs(title = "Dehydration rate",
+       x = "DOVY", y = "Percentage (%)") +
+  scale_x_discrete(drop = FALSE) +  # Keep all DOVY levels
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# CHARSTOL
+tbl <- table(df$DOVY, df$CHARSTOL)[,-c(1,2)]
+prop_tbl <- prop.table(tbl, margin = 1) * 100
+df_long <- melt(prop_tbl)
+colnames(df_long) <- c("DOVY", "CHARSTOL", "Percentage")
+
+df_long$DOVY <- factor(df_long$DOVY, levels = unique(df_long$DOVY))
+
+p11<-ggplot(df_long, aes(x = DOVY, y = Percentage, group = CHARSTOL, color = CHARSTOL)) +
+  geom_line(size = 0.5) +
+  geom_point(size = 2) +
+  labs(title = "Stool character",
+       x = "DOVY", y = "Percentage (%)") +
+  scale_x_discrete(drop = FALSE) +  # Keep all DOVY levels
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+#CONSTOL
+
+tbl <- table(df$DOVY, df$CONSTOL)[,-c(1,2)]
+prop_tbl <- prop.table(tbl, margin = 1) * 100
+df_long <- melt(prop_tbl)
+colnames(df_long) <- c("DOVY", "CONSTOL", "Percentage")
+
+df_long$DOVY <- factor(df_long$DOVY, levels = unique(df_long$DOVY))
+
+p12<-ggplot(df_long, aes(x = DOVY, y = Percentage, group = CONSTOL, color = CONSTOL)) +
+  geom_line(size = 0.5) +
+  geom_point(size = 2) +
+  labs(title = "Stool contains Mucus/Blood",
+       x = "DOVY", y = "Percentage (%)") +
+  scale_x_discrete(drop = FALSE) +  # Keep all DOVY levels
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# NUMSTOOL
+
+tbl <- table(df$DOVY, df$NUMSTOOL)[,-c(1,2)]
+prop_tbl <- prop.table(tbl, margin = 1) * 100
+df_long <- melt(prop_tbl)
+colnames(df_long) <- c("DOVY", "NUMSTOOL", "Percentage")
+
+df_long$DOVY <- factor(df_long$DOVY, levels = unique(df_long$DOVY))
+
+p13<-ggplot(df_long, aes(x = DOVY, y = Percentage, group = NUMSTOOL, color = NUMSTOOL)) +
+  geom_line(size = 0.5) +
+  geom_point(size = 2) +
+  labs(title = "Number of stool per day",
+       x = "DOVY", y = "Percentage (%)") +
+  scale_x_discrete(drop = FALSE) +  # Keep all DOVY levels
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# VOMIT
+tbl <- table(df$DOVY, df$VOMIT)[,-c(1)]
+prop_tbl <- prop.table(tbl, margin = 1) * 100
+df_long <- melt(prop_tbl)
+colnames(df_long) <- c("DOVY", "VOMIT", "Percentage")
+
+df_long$DOVY <- factor(df_long$DOVY, levels = unique(df_long$DOVY))
+
+p14<-ggplot(df_long, aes(x = DOVY, y = Percentage, group = VOMIT, color = VOMIT)) +
+  geom_line(size = 0.5) +
+  geom_point(size = 2) +
+  labs(title = "Number of vomiting per day",
+       x = "DOVY", y = "Percentage (%)") +
+  scale_x_discrete(drop = FALSE) +  # Keep all DOVY levels
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+#ABDPAIN
+tbl <- table(df$DOVY, df$ABDPAIN)[,-c(1,2)]
+prop_tbl <- prop.table(tbl, margin = 1) * 100
+df_long <- melt(prop_tbl)
+colnames(df_long) <- c("DOVY", "ABDPAIN", "Percentage")
+
+df_long$DOVY <- factor(df_long$DOVY, levels = unique(df_long$DOVY))
+
+p15<-ggplot(df_long, aes(x = DOVY, y = Percentage, group = ABDPAIN, color = ABDPAIN)) +
+  geom_line(size = 0.5) +
+  geom_point(size = 2) +
+  labs(title = "Abdominal pain",
+       x = "DOVY", y = "Percentage (%)") +
+  scale_x_discrete(drop = FALSE) +  # Keep all DOVY levels
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+library(ggpubr)
+ggarrange(p10, p13, p15, 
+          ncol = 1, nrow = 3)
+
+tiff(filename = "dehydration.tiff",
+     width = 12, height = 6, units = "in", res = 300)
+p10
+dev.off()
+
+tiff(filename = "number_stool.tiff",
+     width = 12, height = 6, units = "in", res = 300)
+p13
+dev.off()
+
+tiff(filename = "abdominal pain.tiff",
+     width = 12, height = 6, units = "in", res = 300)
+p15
+dev.off()
+
+tiff(filename = "vomiting.tiff",width = 12, height = 6, units = "in", res = 300)
+
+dev.off()
+
+```
+
+
+
