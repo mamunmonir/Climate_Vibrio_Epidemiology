@@ -21,11 +21,8 @@ names(beast_tree[1,])
 
 x <- as_tibble(beast_tree)
 x
-
 class(x)
-
-write.csv(as.matrix(x), file="beast_tree_data.csv")
-
+#write.csv(as.matrix(x), file="beast_tree_data.csv")
 as.phylo(x)
 
 ##############
@@ -36,11 +33,9 @@ to_drop<-c("BD_1971_ERR025385","BD_1979_ERR025383",
            "BD_2019_SRR14297680","BD_2020_BFS822",
            "BD_2022_DRR395013")
 beast_tree_reduced<- drop.tip(beast_tree, to_drop)
-
 metadata_beast<-as_tibble(read.csv("metadata_beast_tree.csv",header=TRUE, sep = ","))
 
 x<-as_tibble(beast_tree_reduced)
-
 metadata_beast_subset = metadata_beast[metadata_beast$label %in% x$label,]
 
 y <- full_join(x, metadata_beast_subset, by = 'label')
@@ -51,24 +46,13 @@ as.treedata(y)
 y %>% as.treedata %>% as_tibble
 
 child(y, 458)
-
 parent(y, 2)
-
 offspring(y, 458)
-
 ancestor(y, 2)
-
 MRCA(y, 2, 3)
-
 child(beast_tree_reduced, 458)
 
-write.csv(as.matrix(y), file="reduced_tree_data.csv")
-
-
-MRCA(y, 208, 211)
-
-parent(y,208)
-parent(y,211)
+#write.csv(as.matrix(y), file="reduced_tree_data.csv")
 
 #######################
 tree <- beast_tree_reduced@phylo
@@ -170,34 +154,6 @@ tree_df <- tree_data$data
 tree_df <- merge(tree_df, data_lineage, by.x = "label", by.y = "row.names", all.x = TRUE)
 
 # Step 1: Basic plot without adding heatmap
-
-p <- ggtree(beast_tree_reduced, mrsd = "2024-09-27") +
-  geom_tippoint(data = tree_df, aes(x = x, y = y, color = Lineage), size = 1) +
-  theme_tree2() +
-  scale_x_continuous(
-    name = "Year",
-    breaks = seq(1950, 2025, by = 5),  # Custom tick marks every 5 years
-    labels = seq(1950, 2025, by = 5)
-  )+
-  xlab("Year") +
-  scale_color_brewer(palette = "Set1") +
-  guides(color = guide_legend(title = "Lineage"))
-
-# Legend in left side
-
-p <- ggtree(beast_tree_reduced, mrsd = "2024-09-27") + 
-  geom_tippoint(data = tree_df, aes(x = x, y = y, color = Lineage), size = 1) +
-  theme_tree2() +
-  scale_x_continuous(
-    name = "Year",
-    breaks = seq(1950, 2025, by = 5),
-    labels = seq(1950, 2025, by = 5)
-  ) +
-  xlab("Year") +
-  scale_color_brewer(palette = "Set1") +
-  guides(color = guide_legend(title = "Lineage")) +
-  theme(legend.position = "left")
-
 lineage_colors <- c(
   "Ref" = "#3c3c3c",   
   "BD-0" = "#3385ca" ,   
