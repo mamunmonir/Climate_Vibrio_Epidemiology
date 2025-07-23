@@ -69,9 +69,6 @@ ggplot(data = dhaka) +
   xlab("")+ ylab("")+
   theme_minimal()
 
-
-
-
 #multiple division
 sylhet_chittagong_dhaka <- get_divisions(divisions = c("Sylhet", "Chittagong", "Dhaka"),level =  "upazila")
 ggplot(data = sylhet_chittagong_dhaka) +
@@ -89,9 +86,6 @@ ggplot(bangladesh::map_union) +
   geom_sf() +
   geom_point(data = amtali, x = amtali$lon, y = amtali$lat, col = "red", size = 3) 
 
-
-
-
 ################################################
 
 library(leaflet)
@@ -105,8 +99,6 @@ library(maps)
 mapStates = map("state", fill = TRUE, plot = FALSE)
 leaflet(data = dhaka) %>% addTiles() %>%
   addPolygons(fillColor = topo.colors(10, alpha = NULL), stroke = FALSE)
-
-
 
 ############################
 setwd("/Users/monirulmemlab/Research_data/Hospital_data_icddrb")
@@ -128,9 +120,6 @@ leaflet(locations_cord) %>% setView(90.3898, 23.7584, zoom = 12) %>% addTiles(ca
              radius = ~ Year_2022*18, popup = ~Location, color = "red", fillOpacity = 0.5) %>% 
   addCircleMarkers(90.3998, 23.7764, radius = 5, color = "", fillColor = "green", fillOpacity = 1, label = "icddr,b") %>%
   addMarkers(90.3998, 23.7764, label = "icddr,b", labelOptions = labelOptions(noHide = T, textOnly = TRUE))
-
-
-
 
 library(bangladesh)
 library(ggplot2)
